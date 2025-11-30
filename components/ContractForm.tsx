@@ -55,12 +55,16 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
   const totalValue = (rentValue + waterFee + insuranceFee + serviceFee + officeFeeAmount + otherAmount) - otherDeduction;
 
   // Installment Logic:
-  // First Installment = (Rent/Count) + Full Water + Fees + Office - Deductions
-  // Other Installments = (Rent/Count)
+  // Water Fee is now divided across ALL installments.
+  // First Installment = (Rent/Count) + (Water/Count) + Fees + Office - Deductions
+  // Other Installments = (Rent/Count) + (Water/Count)
   
-  const rentPerInstallment = rentValue / (installmentCount || 1);
-  const otherInstallment = Math.round(rentPerInstallment);
-  const firstInstallment = Math.round(rentPerInstallment + waterFee + insuranceFee + serviceFee + officeFeeAmount + otherAmount - otherDeduction);
+  const count = installmentCount || 1;
+  const rentPerInstallment = rentValue / count;
+  const waterPerInstallment = waterFee / count;
+  
+  const otherInstallment = Math.round(rentPerInstallment + waterPerInstallment);
+  const firstInstallment = Math.round((rentPerInstallment + waterPerInstallment) + insuranceFee + serviceFee + officeFeeAmount + otherAmount - otherDeduction);
 
   useEffect(() => {
     setBuildings(getBuildings());
@@ -106,7 +110,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
               id: crypto.randomUUID(),
               userId: currentUser.id, 
               title: `Rent Due (${i}/${contract.installmentCount}): ${contract.unitName}`,
-              description: `Installment #${i}. Expected: ${i === 1 ? contract.firstInstallment : contract.otherInstallment}`,
+              description: `Installment #${i}. Expected: ${i === 1 ? contract.firstInstallment : contract.otherInstallment} SAR`,
               status: TaskStatus.TODO,
               createdAt: Date.now(),
               dueDate: current.toISOString().split('T')[0]
@@ -127,7 +131,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
     
     // Duplicate Check: If not renewing, check if occupied
     if (!renewalSourceId && isUnitOccupied(buildingId, unitName)) {
-        setErrorMsg(`Unit ${unitName} has an ACTIVE contract. Please finalize it first.`);
+        setErrorMsg(`Unit ${unitName} has an ACTIVE contract. Please finalize/terminate it first.`);
         return;
     }
 
@@ -195,10 +199,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
   // --- FINALIZATION FIX ---
   const handleFinalize = (e: React.MouseEvent, c: Contract) => {
     e.stopPropagation(); // Stop propagation
+    e.preventDefault();
     if (window.confirm(`Are you sure you want to FINALIZE Contract #${c.contractNo}? This will mark it as Terminated.`)) {
-       const updated = { ...c, status: 'Terminated' as const };
+       const updated: Contract = { ...c, status: 'Terminated' };
        saveContract(updated);
-       
        // Force update local state to reflect change immediately
        setExistingContracts(prev => prev.map(item => item.id === c.id ? updated : item));
     }
@@ -206,6 +210,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
 
   const handleRenew = (e: React.MouseEvent, c: Contract) => {
     e.stopPropagation();
+    e.preventDefault();
     setRenewalSourceId(c.id);
     setBuildingId(c.buildingId);
     setUnitName(c.unitName);
@@ -356,12 +361,12 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
                               <div>
                                   <div className="text-[10px] text-emerald-400 uppercase font-black mb-1">1st Installment</div>
                                   <div className="text-xl font-bold text-white">{firstInstallment.toLocaleString()}</div>
-                                  <div className="text-[9px] text-slate-400 mt-0.5">Rent + Water + All Fees</div>
+                                  <div className="text-[9px] text-slate-400 mt-0.5">Rent/N + Water/N + All Fees</div>
                               </div>
                               <div>
                                   <div className="text-[10px] text-blue-400 uppercase font-black mb-1">Other Installments</div>
                                   <div className="text-xl font-bold text-white">{otherInstallment.toLocaleString()}</div>
-                                  <div className="text-[9px] text-slate-400 mt-0.5">Rent Share Only</div>
+                                  <div className="text-[9px] text-slate-400 mt-0.5">Rent/N + Water/N</div>
                               </div>
                           </div>
                       </div>
@@ -395,6 +400,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
                     <th className="px-6 py-4 font-black text-slate-400 text-[10px] uppercase">Contract #</th>
                     <th className="px-6 py-4 font-black text-slate-400 text-[10px] uppercase">Tenant</th>
                     <th className="px-6 py-4 font-black text-slate-400 text-[10px] uppercase">Value</th>
+                    <th className="px-6 py-4 font-black text-slate-400 text-[10px] uppercase">Progress</th>
                     <th className="px-6 py-4 font-black text-slate-400 text-[10px] uppercase">Status</th>
                     <th className="px-6 py-4 font-black text-slate-400 text-[10px] uppercase text-right">Actions</th>
                  </tr>
@@ -409,13 +415,19 @@ const ContractForm: React.FC<ContractFormProps> = ({ currentUser }) => {
                       </td>
                       <td className="px-6 py-4 text-sm font-black text-emerald-600">{c.totalValue.toLocaleString()}</td>
                       <td className="px-6 py-4">
+                         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                             {/* Mock progress bar for now */}
+                             <div className="h-full bg-indigo-500 w-1/3"></div>
+                         </div>
+                      </td>
+                      <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : (c.status === 'Terminated' ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-rose-50 text-rose-600 border-rose-100')}`}>
                            {c.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right flex justify-end gap-2">
-                          <button onClick={(e) => handleRenew(e, c)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><RotateCcw size={16}/></button>
-                          <button onClick={(e) => handleFinalize(e, c)} className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-rose-50 hover:text-rose-600"><Archive size={16}/></button>
+                          <button onClick={(e) => handleRenew(e, c)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Renew"><RotateCcw size={16}/></button>
+                          <button onClick={(e) => handleFinalize(e, c)} className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-rose-50 hover:text-rose-600" title="Finalize / Terminate"><Archive size={16}/></button>
                       </td>
                    </tr>
                  ))}

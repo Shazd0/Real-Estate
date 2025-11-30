@@ -14,7 +14,8 @@
     "lucide-react": "^0.555.0",
     "recharts": "^3.5.1",
     "react-router-dom": "^7.9.6",
-    "react-csv": "^2.2.2"
+    "react-csv": "^2.2.2",
+    "firebase": "^12.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
